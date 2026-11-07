@@ -29,6 +29,10 @@ import com.seca.messages.sms.MessageNotifications
 import com.seca.messages.sms.MessagesRepository
 import com.seca.messages.sms.ScheduledMessage
 import com.seca.messages.sms.ScheduledMessages
+import com.seca.messages.mms.ContactCard
+import com.seca.messages.mms.MmsAttachment
+import com.seca.messages.mms.MmsPdu
+import com.seca.messages.mms.MmsSender
 import com.seca.messages.sms.SendingSim
 import com.seca.messages.sms.sendingSims
 import com.seca.messages.sms.SmsSender
@@ -440,6 +444,33 @@ class MessagesViewModel(application: Application) : AndroidViewModel(application
     }
 
     /**
+     * Sends what the owner attached, as a multimedia message, with the words they typed.
+     *
+     * By carrier rather than by Seca Link, so it reaches any phone. Pictures are shrunk to what
+     * a network will carry; anything too big to send is named rather than dropped, because a
+     * file that silently does not arrive is the worst way to learn about a size limit.
+     */
+    fun sendAttachment(address: String, uri: Uri, text: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val read = MmsAttachment.read(getApplication(), uri)
+            val part = read.part
+            if (part == null) {
+                val refused = read.refused
+                val said = if (refused == null || refused.bytes == 0) {
+                    text(R.string.attachment_unreadable)
+                } else {
+                    text(R.string.attachment_too_large, refused.name, refused.bytes / BYTES_PER_KB)
+                }
+                withContext(Dispatchers.Main) { toast(said) }
+                return@launch
+            }
+            if (MmsSender.send(getApplication(), listOf(address), text, listOf(part)) == null) {
+                withContext(Dispatchers.Main) { toast(text(R.string.attachment_not_sent)) }
+            }
+        }
+    }
+
+    /**
      * The SIMs a text can be sent from, when there is more than one to choose between.
      *
      * Suspending because reading them is a call into the telephony service, and a conversation
@@ -455,6 +486,53 @@ class MessagesViewModel(application: Application) : AndroidViewModel(application
             val sent = links.sendVoice(address, path)
             java.io.File(path).delete()
             if (!sent) withContext(Dispatchers.Main) { toast(text(R.string.voice_not_sent)) }
+        }
+    }
+
+    /**
+     * Sends the voice message recorded at [path] as a multimedia message.
+     *
+     * For a conversation with no link: the recording leaves through the carrier, so it arrives
+     * on a phone that has never heard of Seca. The recorder already keeps it short enough for a
+     * network to carry; a recording that somehow is not is said out loud rather than dropped.
+     */
+    fun sendVoiceByCarrier(address: String, path: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = java.io.File(path)
+            val bytes = runCatching { file.readBytes() }.getOrNull()
+            file.delete()
+            if (bytes == null || bytes.isEmpty()) {
+                withContext(Dispatchers.Main) { toast(text(R.string.voice_not_sent)) }
+                return@launch
+            }
+            if (bytes.size > MmsAttachment.BUDGET) {
+                val said = text(R.string.attachment_too_large, file.name, bytes.size / BYTES_PER_KB)
+                withContext(Dispatchers.Main) { toast(said) }
+                return@launch
+            }
+            val part = MmsPdu.Part(VOICE_TYPE, file.name, "<voice>", bytes)
+            if (MmsSender.send(getApplication(), listOf(address), "", listOf(part)) == null) {
+                withContext(Dispatchers.Main) { toast(text(R.string.voice_not_sent)) }
+            }
+        }
+    }
+
+    /**
+     * Sends a contact as a card, with whatever was typed alongside it.
+     *
+     * The card comes from Android's own copy of the contact rather than being written here, so
+     * the phone at the other end is handed the format its own contacts app reads.
+     */
+    fun sendContact(address: String, picked: Uri, words: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val part = ContactCard.read(getApplication(), picked)
+            if (part == null) {
+                withContext(Dispatchers.Main) { toast(text(R.string.contact_not_read)) }
+                return@launch
+            }
+            if (MmsSender.send(getApplication(), listOf(address), words, listOf(part)) == null) {
+                withContext(Dispatchers.Main) { toast(text(R.string.attachment_not_sent)) }
+            }
         }
     }
 
@@ -694,3 +772,9 @@ class MessagesViewModel(application: Application) : AndroidViewModel(application
         _ui.update { it.copy(profiles = profiles) }
     }
 }
+
+/** For saying a size in words someone reads rather than in bytes. */
+private const val BYTES_PER_KB = 1024
+
+/** AMR in a 3GPP file: the one sound format every telephone has understood for twenty years. */
+private const val VOICE_TYPE = "audio/3gpp"

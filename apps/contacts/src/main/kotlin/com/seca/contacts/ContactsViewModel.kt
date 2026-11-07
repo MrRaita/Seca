@@ -3,6 +3,9 @@ package com.seca.contacts
 import android.app.Application
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -210,6 +213,26 @@ class ContactsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /**
+     * A card another app handed over, waiting on the right to write it.
+     *
+     * Held rather than written at once: adding somebody to the address book asks for a
+     * permission, and a permission is asked for by the screen, not by the activity that was
+     * handed the file.
+     */
+    var offered by mutableStateOf<Uri?>(null)
+        private set
+
+    /** Another app opened a card with this one. */
+    fun offer(uri: Uri) {
+        offered = uri
+    }
+
+    /** The screen has taken it from here. */
+    fun offerTaken() {
+        offered = null
+    }
+
     /** Adds the contacts of a .vcf file, on this device only, skipping those already here. */
     fun importContacts(uri: Uri) {
         viewModelScope.launch {
@@ -323,6 +346,11 @@ class ContactsViewModel(application: Application) : AndroidViewModel(application
 
     fun setMyPhoto(uri: Uri) {
         viewModelScope.launch { if (myCards.setPhoto(uri)) loadMyCard() }
+    }
+
+    /** The square the owner framed, rather than whatever happened to be in the middle. */
+    fun setMyPhoto(jpeg: ByteArray) {
+        viewModelScope.launch { if (myCards.setPhoto(jpeg)) loadMyCard() }
     }
 
     fun removeMyPhoto() {

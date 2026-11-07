@@ -82,6 +82,9 @@ internal object MmsReader {
                 date = date * MILLIS_PER_SECOND,
                 status = statusOf(box),
                 image = parts.image,
+                audio = parts.audio,
+                attachment = parts.other,
+                attachmentAt = parts.otherAt,
             )
     }
 
@@ -109,7 +112,20 @@ internal object MmsReader {
         }
     }.getOrNull().orEmpty()
 
-    private class Parts(val text: String, val image: String?)
+    /**
+     * What one message carries, once its rows have been read.
+     *
+     * [other] is the type of anything that is neither words, a picture nor a sound — a contact
+     * card, a document — kept as its type rather than thrown away, so the conversation can say
+     * what arrived instead of calling everything a photograph.
+     */
+    private class Parts(
+        val text: String,
+        val image: String?,
+        val audio: String? = null,
+        val other: String? = null,
+        val otherAt: String? = null,
+    )
 
     /**
      * The parts of several messages at once, by the message they belong to.
@@ -122,28 +138,43 @@ internal object MmsReader {
         if (messageIds.isEmpty()) return emptyMap()
         resolver.query(
             PART_URI,
-            arrayOf("_id", "ct", "text", "mid"),
+            arrayOf("_id", "ct", "text", "mid", "cl", "name"),
             "mid IN (${messageIds.joinToString(",")})",
             null,
             "seq ASC",
         )?.use { c ->
             val words = HashMap<Long, StringBuilder>()
             val images = HashMap<Long, String>()
+            val sounds = HashMap<Long, String>()
+            val others = HashMap<Long, String>()
+            val othersAt = HashMap<Long, String>()
             while (c.moveToNext()) {
                 val owner = c.getLong(3)
                 val type = c.getString(1).orEmpty()
+                val called = c.getString(4) ?: c.getString(5)
+                val where = "$PART_URI/${c.getLong(0)}"
                 when {
-                    type.startsWith("text/") -> c.getString(2)?.takeIf { it.isNotBlank() }?.let { said ->
-                        val sentence = words.getOrPut(owner) { StringBuilder() }
-                        if (sentence.isNotEmpty()) sentence.append('\n')
-                        sentence.append(said)
-                    }
+                    // A contact card is written as text, and reading it into the bubble would
+                    // put somebody's whole address book entry where a sentence belongs.
+                    type.startsWith("text/") && !type.endsWith("vcard") ->
+                        c.getString(2)?.takeIf { it.isNotBlank() }?.let { said ->
+                            val sentence = words.getOrPut(owner) { StringBuilder() }
+                            if (sentence.isNotEmpty()) sentence.append('\n')
+                            sentence.append(said)
+                        }
                     // The presentation part describes a slideshow; it is not something to show.
                     type == SMIL -> Unit
-                    type.startsWith("image/") -> images.getOrPut(owner) { "$PART_URI/${c.getLong(0)}" }
+                    type.startsWith("image/") -> images.getOrPut(owner) { where }
+                    SoundPart.matches(type, called) -> sounds.getOrPut(owner) { where }
+                    else -> {
+                        others.getOrPut(owner) { type }
+                        othersAt.getOrPut(owner) { where }
+                    }
                 }
             }
-            (words.keys + images.keys).associateWith { Parts(words[it]?.toString().orEmpty(), images[it]) }
+            (words.keys + images.keys + sounds.keys + others.keys).associateWith {
+                Parts(words[it]?.toString().orEmpty(), images[it], sounds[it], others[it], othersAt[it])
+            }
         }
     }.getOrNull().orEmpty()
 
@@ -186,6 +217,7 @@ internal object MmsReader {
     private val PART_URI: Uri = "content://mms/part".toUri()
     private const val ADDRESSES = "addr"
     private const val SMIL = "application/smil"
+
     private const val MILLIS_PER_SECOND = 1000L
     private const val ADDRESS_FROM = 137
     private const val ADDRESS_TO = 151
