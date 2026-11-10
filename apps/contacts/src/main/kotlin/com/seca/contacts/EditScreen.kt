@@ -6,6 +6,10 @@ import android.provider.ContactsContract.CommonDataKinds.Email
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,6 +74,7 @@ import com.seca.core.design.component.rememberContactPhoto
 import kotlinx.coroutines.launch
 import com.seca.core.contacts.ContactField
 import com.seca.core.contacts.ContactInput
+import com.seca.core.contacts.PostalAddress
 import com.seca.core.design.SecaIcons
 import com.seca.core.design.component.SecaAvatar
 import com.seca.core.design.component.SecaProfileBadge
@@ -101,7 +106,7 @@ internal fun EditScreen(
     var familyName by remember(id) { mutableStateOf("") }
     val phones = remember(id) { mutableStateListOf<ContactField>() }
     val emails = remember(id) { mutableStateListOf<ContactField>() }
-    val addresses = remember(id) { mutableStateListOf<ContactField>() }
+    val addresses = remember(id) { mutableStateListOf<PostalAddress>() }
     var organization by remember(id) { mutableStateOf("") }
     var jobTitle by remember(id) { mutableStateOf("") }
     var website by remember(id) { mutableStateOf("") }
@@ -231,43 +236,23 @@ internal fun EditScreen(
                 // changed: the editor used to draw a made-up one even for a contact who had
                 // a photograph, which read as the photograph having been lost.
                 val shown = preview ?: saved.takeIf { picture != ContactsViewModel.Picture.Removed }
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                ) {
-                    SecaAvatar(
-                        initials = initialsOf("$givenName $familyName"),
-                        photoUri = null,
-                        size = 112.dp,
-                        // Takes the colour of the profile picked below, as a preview.
-                        tone = ui.profiles.indexOfFirst { it.id == profileId }.coerceAtLeast(0),
-                        seed = existing?.displayName ?: "new-contact",
-                        expressive = true,
-                        photo = shown,
-                        modifier = Modifier.clickable(onClickLabel = stringResource(R.string.change_photo)) {
-                            pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        },
-                    )
-                    Row {
-                        TextButton(
-                            onClick = {
-                                pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            },
-                        ) { Text(stringResource(if (shown == null) R.string.add_photo else R.string.change_photo)) }
-                        if (shown != null) {
-                            TextButton(
-                                onClick = {
-                                    picture = ContactsViewModel.Picture.Removed
-                                    preview = null
-                                },
-                            ) { Text(stringResource(R.string.remove_photo)) }
+                PhotoHeader(
+                    initials = initialsOf("$givenName $familyName"),
+                    tone = ui.profiles.indexOfFirst { it.id == profileId }.coerceAtLeast(0),
+                    seed = existing?.displayName ?: "new-contact",
+                    photo = shown,
+                    onPick = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    onRemove = if (shown == null) {
+                        null
+                    } else {
+                        {
+                            picture = ContactsViewModel.Picture.Removed
+                            preview = null
                         }
-                    }
-                }
+                    },
+                )
 
-                FormSection(SecaIcons.PersonOutline) {
+                FormCard(SecaIcons.PersonOutline, stringResource(R.string.name)) {
                     NameField(givenName, stringResource(R.string.given_name)) { givenName = it }
                     NameField(familyName, stringResource(R.string.family_name)) { familyName = it }
                 }
@@ -275,7 +260,7 @@ internal fun EditScreen(
                 // Said even when there is only one place: an address book that quietly
                 // writes into an account that syncs should say so, whosever account it is.
                 if (id == null && savingIn != null) {
-                    FormSection(SecaIcons.Shield) {
+                    FormCard(SecaIcons.Shield, stringResource(R.string.saved_in)) {
                         SavingPlaceRow(
                             place = savingIn,
                             choosable = places.size > 1,
@@ -284,7 +269,7 @@ internal fun EditScreen(
                     }
                 }
 
-                FormSection(SecaIcons.Phone) {
+                FormCard(SecaIcons.Phone, stringResource(R.string.number)) {
                     FieldList(
                         phones,
                         label = stringResource(R.string.number),
@@ -298,7 +283,7 @@ internal fun EditScreen(
                     AddFieldButton(stringResource(R.string.add_number)) { phones.add(ContactField(null, "", Phone.TYPE_MOBILE)) }
                 }
 
-                FormSection(SecaIcons.Email) {
+                FormCard(SecaIcons.Email, stringResource(R.string.email_address)) {
                     FieldList(
                         emails,
                         label = stringResource(R.string.email_address),
@@ -310,49 +295,36 @@ internal fun EditScreen(
                     AddFieldButton(stringResource(R.string.add_email)) { emails.add(ContactField(null, "", Email.TYPE_HOME)) }
                 }
 
-                FormSection(SecaIcons.Place) {
-                    FieldList(
-                        addresses,
-                        label = stringResource(R.string.address),
-                        keyboard = KeyboardType.Text,
-                        removeLabel = stringResource(R.string.remove_address),
-                        types = AddressTypes,
-                        typeLabel = { StructuredPostal.getTypeLabel(resources, it, "").toString() },
-                    )
-                    AddFieldButton(stringResource(R.string.add_address)) {
-                        addresses.add(ContactField(null, "", StructuredPostal.TYPE_HOME))
+                FormCard(SecaIcons.Place, stringResource(R.string.address)) {
+                    addresses.forEachIndexed { index, address ->
+                        AddressFields(
+                            address = address,
+                            typeLabel = { StructuredPostal.getTypeLabel(resources, it, "").toString() },
+                            removeLabel = stringResource(R.string.remove_address),
+                            onChange = { addresses[index] = it },
+                            // The last one left is emptied rather than removed, as a number is,
+                            // so the section never loses the fields that let one be typed.
+                            onRemove = {
+                                if (addresses.size > 1) addresses.removeAt(index) else addresses[index] = PostalAddress()
+                            },
+                        )
                     }
+                    AddFieldButton(stringResource(R.string.add_address)) { addresses.add(PostalAddress()) }
                 }
 
-                FormSection(SecaIcons.Work) {
+                // Six cards of one field each used to stand here, one under another, each with
+                // a little grey icon in the margin. They are the same card on the page that
+                // shows the contact, and they are one card here now too.
+                FormCard(SecaIcons.Subject, stringResource(R.string.about)) {
                     PlainField(organization, stringResource(R.string.company)) { organization = it }
                     PlainField(jobTitle, stringResource(R.string.job_title)) { jobTitle = it }
-                }
-
-                FormSection(SecaIcons.Link) {
                     PlainField(website, stringResource(R.string.website), keyboard = KeyboardType.Uri) { website = it }
-                }
-
-                FormSection(SecaIcons.Cake) {
                     DateField(birthday, stringResource(R.string.birthday)) { birthday = it }
-                }
-
-                FormSection(SecaIcons.Event) {
                     DateField(anniversary, stringResource(R.string.anniversary)) { anniversary = it }
-                }
-
-                FormSection(SecaIcons.Subject) {
                     PlainField(note, stringResource(R.string.notes), singleLine = false) { note = it }
                 }
 
-                // Lined up with the chips rather than with the "Profile" label above them.
-                FormSection(SecaIcons.Label, iconTop = 50.dp) {
-                    Text(
-                        text = stringResource(R.string.profile),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 14.dp),
-                    )
+                FormCard(SecaIcons.Label, stringResource(R.string.profile)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -372,25 +344,115 @@ internal fun EditScreen(
     }
 }
 
-/** One part of the form: its icon at the start, lined up with the first field, and its fields beside it. */
+/**
+ * The face at the top of the editor.
+ *
+ * The picture is the first thing anybody looks at and it used to be two words of blue text
+ * under a circle. A badge on the corner says the circle is a button, which is the one thing
+ * nobody could tell before.
+ */
 @Composable
-private fun FormSection(icon: ImageVector, iconTop: Dp = 24.dp, content: @Composable ColumnScope.() -> Unit) {
-    Row(
+private fun PhotoHeader(
+    initials: String,
+    tone: Int,
+    seed: String,
+    photo: ImageBitmap?,
+    onPick: () -> Unit,
+    onRemove: (() -> Unit)?,
+) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(colors.surfaceContainerLow)
+            .padding(vertical = 24.dp),
+    ) {
+        Box {
+            SecaAvatar(
+                initials = initials,
+                photoUri = null,
+                size = 112.dp,
+                // Takes the colour of the profile picked below, as a preview.
+                tone = tone,
+                seed = seed,
+                expressive = true,
+                photo = photo,
+                modifier = Modifier.clickable(onClickLabel = stringResource(R.string.change_photo), onClick = onPick),
+            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(40.dp)
+                    // A ring in the card's own colour, so the badge sits on the picture rather
+                    // than inside it: without it a dark photograph swallows the whole thing.
+                    .clip(CircleShape)
+                    .background(colors.surfaceContainerLow)
+                    .padding(3.dp)
+                    .clip(CircleShape)
+                    .background(colors.primaryContainer)
+                    .clickable(onClickLabel = stringResource(R.string.change_photo), onClick = onPick),
+            ) {
+                Icon(
+                    imageVector = SecaIcons.Photo,
+                    contentDescription = null,
+                    tint = colors.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 16.dp),
+        ) {
+            FilledTonalButton(onClick = onPick) {
+                Text(stringResource(if (photo == null) R.string.add_photo else R.string.change_photo))
+            }
+            if (onRemove != null) {
+                TextButton(onClick = onRemove) { Text(stringResource(R.string.remove_photo)) }
+            }
+        }
+    }
+}
+
+/**
+ * One part of the form: a heading, then its fields on a card of their own.
+ *
+ * The editor used to be a single column of boxes with a grey icon in the margin beside each
+ * one, which is what a form looks like when nobody has decided where it ends. The page that
+ * shows a contact has always grouped its rows under a heading; this is the same furniture, so
+ * reading a contact and writing one look like the same app.
+ */
+@Composable
+private fun FormCard(icon: ImageVector, title: String, content: @Composable ColumnScope.() -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Column(
         Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = iconTop),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(18.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = colors.primary,
+                modifier = Modifier.padding(start = 10.dp),
+            )
+        }
         Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier
-                .weight(1f)
-                .padding(start = 16.dp),
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(colors.surfaceContainerLow)
+                .padding(horizontal = 14.dp, vertical = 14.dp),
             content = content,
         )
     }
@@ -411,6 +473,57 @@ private fun NameField(value: String, label: String, onChange: (String) -> Unit) 
         modifier = Modifier.fillMaxWidth(),
     )
 }
+
+/**
+ * One address, in the parts an address has.
+ *
+ * It was one box, and one box is why an address typed into Seca arrived in every other client
+ * as a town and a postcode crammed into the street line: there was nowhere else to put them.
+ * Five boxes is more to look at, and it is the only way the parts survive leaving the phone.
+ *
+ * The postcode and the town share a line, because they are read together and because a
+ * postcode on a line of its own wastes the width of a screen.
+ */
+@Composable
+private fun AddressFields(
+    address: PostalAddress,
+    typeLabel: (Int) -> String,
+    removeLabel: String,
+    onChange: (PostalAddress) -> Unit,
+    onRemove: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PlainField(address.street, stringResource(R.string.street), modifier = Modifier.weight(1f)) {
+                onChange(address.copy(street = it))
+            }
+            IconButton(onClick = onRemove) {
+                Icon(SecaIcons.Close, contentDescription = removeLabel)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PlainField(address.postcode, stringResource(R.string.postcode), modifier = Modifier.weight(POSTCODE_SHARE)) {
+                onChange(address.copy(postcode = it))
+            }
+            PlainField(address.city, stringResource(R.string.city), modifier = Modifier.weight(CITY_SHARE)) {
+                onChange(address.copy(city = it))
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PlainField(address.region, stringResource(R.string.region), modifier = Modifier.weight(1f)) {
+                onChange(address.copy(region = it))
+            }
+            PlainField(address.country, stringResource(R.string.country), modifier = Modifier.weight(1f)) {
+                onChange(address.copy(country = it))
+            }
+        }
+        TypeSelector(address.type, AddressTypes, typeLabel) { onChange(address.copy(type = it)) }
+    }
+}
+
+/** A postcode is short and a town is not, so they do not take the same half of the row. */
+private const val POSTCODE_SHARE = 0.4f
+private const val CITY_SHARE = 0.6f
 
 /**
  * The editable numbers or addresses. The last one left is cleared rather than
@@ -513,6 +626,7 @@ private fun FieldEditor(
 private fun PlainField(
     value: String,
     label: String,
+    modifier: Modifier = Modifier,
     keyboard: KeyboardType = KeyboardType.Text,
     singleLine: Boolean = true,
     onChange: (String) -> Unit,
@@ -529,7 +643,7 @@ private fun PlainField(
             capitalization = if (keyboard == KeyboardType.Text) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
             imeAction = if (singleLine) ImeAction.Next else ImeAction.Default,
         ),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     )
 }
 

@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.core.net.toUri
 import androidx.compose.ui.unit.dp
 import com.seca.core.contacts.ContactDetail
+import com.seca.core.contacts.PostalAddress
 import com.seca.core.design.SecaIcons
 import com.seca.core.design.component.SecaAvatar
 import com.seca.core.design.component.SecaEmptyState
@@ -61,6 +62,7 @@ import com.seca.core.model.Profile
 import com.seca.core.model.initialsOf
 import kotlinx.coroutines.launch
 import com.seca.core.design.label
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 
 @Composable
@@ -295,13 +297,16 @@ private fun DetailContent(detail: ContactDetail, ui: ContactsUi, viewModel: Cont
                 )
             }
         }
-        detail.addresses.forEachIndexed { index, field ->
+        detail.addresses.forEachIndexed { index, address ->
+            // Read as one line, kept as its parts: the line is assembled from them, so it can
+            // never say something the parts do not.
+            val written = address.formatted
             SecaGroupItem(index = detail.phones.size + detail.emails.size + index, count = count) {
                 FieldRow(
                     icon = SecaIcons.Place,
-                    value = field.value,
-                    label = StructuredPostal.getTypeLabel(resources, field.type, field.customLabel.orEmpty()).toString(),
-                    onClick = { openMap(context, field.value) },
+                    value = written,
+                    label = StructuredPostal.getTypeLabel(resources, address.type, address.customLabel.orEmpty()).toString(),
+                    onClick = { openMap(context, written) },
                 )
             }
         }
@@ -332,7 +337,16 @@ private fun About(detail: ContactDetail) {
     val notesLabel = stringResource(R.string.notes)
     val rows = buildList {
         if (company.isNotBlank()) add(Triple(SecaIcons.Work, company, companyLabel))
-        detail.birthday?.let { add(Triple(SecaIcons.Cake, formatBirthday(it.value), birthdayLabel)) }
+        // The date, and how old that makes them today: a birthday is read to work that out.
+        detail.birthday?.let { field ->
+            val age = ageFrom(field.value)
+            val written = if (age == null) {
+                formatBirthday(field.value)
+            } else {
+                stringResource(R.string.birthday_with_age, formatBirthday(field.value), pluralStringResource(R.plurals.years_old, age, age))
+            }
+            add(Triple(SecaIcons.Cake, written, birthdayLabel))
+        }
         detail.anniversary?.let { add(Triple(SecaIcons.Event, formatBirthday(it.value), anniversaryLabel)) }
         detail.note?.let { add(Triple(SecaIcons.Subject, it.value, notesLabel)) }
     }

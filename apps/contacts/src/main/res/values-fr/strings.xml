@@ -8,6 +8,11 @@
     <string name="add_photo">Ajouter une photo</string>
     <string name="add_profile">Ajouter un profil</string>
     <string name="address">Adresse</string>
+    <string name="city">Ville</string>
+    <string name="country">Pays</string>
+    <string name="postcode">Code postal</string>
+    <string name="region">Région</string>
+    <string name="street">Rue</string>
     <string name="all">Tous</string>
     <string name="allow_access">Autoriser l\'accès</string>
     <string name="anniversary">Date anniversaire</string>
@@ -204,4 +209,10 @@
     <string name="your_name">Votre nom</string>
     <string name="show_my_card">Afficher Ma fiche</string>
     <string name="show_my_card_hint">Votre propre fiche en haut de la liste. Masquée, elle reste dans les paramètres.</string>
+    <string name="birthday_with_age">%1$s (%2$s)</string>
+    <plurals name="years_old">
+        <item quantity="one">%d an</item>
+        <item quantity="other">%d ans</item>
+        <item quantity="many">%d d’années</item>
+    </plurals>
 </resources>
