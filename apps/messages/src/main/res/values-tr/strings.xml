@@ -115,7 +115,7 @@
     <string name="default_on_hint">Alma, gönderme ve bildirimler</string>
     <string name="delete">Sil</string>
     <string name="delete_conversation">Sohbeti sil</string>
-    <string name="delete_conversation_text">%1$s ile olan tüm mesajlar da gider.</string>
+    <string name="delete_conversation_text">%1$s ile olan tüm mesajlar da silinir.</string>
     <string name="delete_conversation_title">Sohbet silinsin mi?</string>
     <string name="delivered_at">Teslim edildi · %1$s</string>
     <string name="delivery_reports">Teslim raporları</string>
@@ -469,5 +469,5 @@
     <string name="mms_apn">operatör ayarları eksik</string>
     <string name="mms_no_server">operatörün sunucusu yanıt vermedi</string>
     <string name="mms_retry">operatör yeniden denenmesini istedi</string>
-    <string name="delete_conversations_text">Mesajlar da gider ve geri gelmez.</string>
+    <string name="delete_conversations_text">Mesajlar da silinir ve geri getirilemez.</string>
 </resources>

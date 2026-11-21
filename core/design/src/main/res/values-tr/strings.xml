@@ -62,7 +62,7 @@
     <string name="design_calendar_islamic">İslami (Ümmülkura)</string>
     <string name="design_calendar_buddhist">Budist</string>
     <string name="design_calendar_hebrew">İbrani</string>
-    <string name="design_calendar_indian">Hindistan ulusal</string>
+    <string name="design_calendar_indian">Hindistan ulusal takvimi</string>
     <string name="design_calendar_japanese">Japon</string>
     <string name="design_gregorian_too">Miladi: %1$s</string>
     <string name="design_year">Yıl</string>

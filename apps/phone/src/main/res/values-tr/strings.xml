@@ -90,7 +90,7 @@
     <string name="clear_all">Tümünü temizle</string>
     <string name="clear_history">Arama geçmişini temizle</string>
     <string name="clear_history_hint">Bu telefonda, tüm uygulamalar için</string>
-    <string name="clear_history_text">Yapılan ve gelen tüm aramalar, temelli.</string>
+    <string name="clear_history_text">Yapılan ve gelen tüm aramalar kalıcı olarak silinir.</string>
     <string name="clear_history_title">Tüm geçmiş temizlensin mi?</string>
     <string name="colors">Renkler</string>
     <string name="colors_need_contacts">Paketin renklerini seçmek için Seca Kişiler\'i kurun.</string>
@@ -130,7 +130,7 @@
     <string name="empty_profile">Bu profille arama yok</string>
     <string name="empty_rejected">Reddedilen veya engellenen arama yok</string>
     <string name="empty_voicemail">Sesli mesaj yok</string>
-    <string name="enter_number">Bir numara gir</string>
+    <string name="enter_number">Bir numara girin</string>
     <string name="erase">Sil</string>
     <string name="favorites">Favoriler</string>
     <string name="filter_all">Tümü</string>
